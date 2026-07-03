@@ -21,7 +21,9 @@ app.get('/token', (req, res) => {
     incomingAllow: false,
   });
   const token = new AccessToken(accountSid, apiKey, apiSecret, {
-    identity: 'ponix_dialer'
+  identity: 'ponix_dialer',
+  ttl: 3600
+});
   });
   token.addGrant(voiceGrant);
   res.json({ token: token.toJwt() });
