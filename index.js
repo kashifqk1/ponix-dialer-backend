@@ -1,32 +1,31 @@
 const express = require('express');
 const cors = require('cors');
-const { RestClient } = require('@signalwire/compatibility-api');
-const { AccessToken } = require('@signalwire/realtime-api');
 
 const app = express();
 app.use(cors());
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
 
-const projectId = process.env.SIGNALWIRE_PROJECT_ID;
-const apiToken = process.env.SIGNALWIRE_API_TOKEN;
-const spaceUrl = process.env.SIGNALWIRE_SPACE_URL;
-const callerId = process.env.CALLER_ID;
-
-app.get('/token', (req, res) => {
+app.get('/token', async (req, res) => {
   try {
-    const token = new AccessToken({
-      project: projectId,
-      token: apiToken,
-      ttl: 3600,
-    });
-
-    token.addResource({
-      name: 'ponix_dialer',
-      resource: 'calling',
-    });
-
-    res.json({ token: token.toJwt() });
+    const response = await fetch(
+      `https://${process.env.SIGNALWIRE_SPACE_URL}/api/relay/rest/jwt`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Basic ' + Buffer.from(
+            process.env.SIGNALWIRE_PROJECT_ID + ':' + process.env.SIGNALWIRE_API_TOKEN
+          ).toString('base64'),
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          expires_in: 3600,
+          resource: 'ponix_dialer'
+        })
+      }
+    );
+    const data = await response.json();
+    res.json({ token: data.jwt_token });
   } catch (err) {
     console.error('Token error:', err);
     res.status(500).json({ error: err.message });
@@ -34,12 +33,16 @@ app.get('/token', (req, res) => {
 });
 
 app.post('/voice', (req, res) => {
-  const { VoiceResponse } = require('@signalwire/compatibility-api').twiml;
-  const response = new VoiceResponse();
-  const dial = response.dial({ callerId: callerId });
-  dial.number(req.body.To);
+  const to = req.body.To;
+  const callerId = process.env.CALLER_ID;
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Dial callerId="${callerId}">
+    <Number>${to}</Number>
+  </Dial>
+</Response>`;
   res.type('text/xml');
-  res.send(response.toString());
+  res.send(xml);
 });
 
 app.get('/', (req, res) => res.send('Ponix Dialer Backend Running - SignalWire'));
